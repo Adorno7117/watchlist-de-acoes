@@ -51,7 +51,7 @@ export function StockStudyPanel({ isLoading, prices, symbol }: StockStudyPanelPr
           </article>
 
           <article className="study-card">
-            <span>Preco atual</span>
+            <span>Preço atual</span>
             <strong>{formatCurrency(study.currentPrice)}</strong>
             <p>Retorno no periodo: {formatPercent(study.totalReturn * 100)}</p>
           </article>
@@ -76,9 +76,9 @@ export function StockStudyPanel({ isLoading, prices, symbol }: StockStudyPanelPr
             <thead>
               <tr>
                 <th>Horizonte</th>
-                <th>Cenario pessimista</th>
-                <th>Cenario base</th>
-                <th>Cenario otimista</th>
+                <th>Cenário pessimista</th>
+                <th>Cenário base</th>
+                <th>Cenário otimista</th>
               </tr>
             </thead>
             <tbody>

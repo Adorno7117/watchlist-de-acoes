@@ -27,11 +27,11 @@ export function WatchlistTable({ emptyAction, onRemove, quotes, removeIcon, symb
         <thead>
           <tr>
             <th>Ativo</th>
-            <th>Preco</th>
-            <th>Variacao</th>
-            <th>Alta</th>
-            <th>Baixa</th>
-            <th>Volume</th>
+            <th>Preço atual</th>
+            <th>Abertura do dia</th>
+            <th>Variação do dia</th>
+            <th>Baixa do dia</th>
+            <th>Alta do dia</th>
             <th aria-label="Acoes"></th>
           </tr>
         </thead>
@@ -46,14 +46,14 @@ export function WatchlistTable({ emptyAction, onRemove, quotes, removeIcon, symb
                   <strong>{symbol}</strong>
                 </td>
                 <td>{quote ? formatCurrency(quote.currentPrice) : '-'}</td>
+                <td>{quote ? formatCurrency(quote.openPrice) : '-'}</td>
                 <td>
                   <span className={`movement ${movement.tone}`}>
                     {quote ? `${formatCurrency(quote.change)} (${formatPercent(quote.percentChange)})` : '-'}
                   </span>
                 </td>
-                <td>{quote ? formatCurrency(quote.highPrice) : '-'}</td>
                 <td>{quote ? formatCurrency(quote.lowPrice) : '-'}</td>
-                <td>{quote?.volume ? quote.volume.toLocaleString('pt-BR') : '-'}</td>
+                <td>{quote ? formatCurrency(quote.highPrice) : '-'}</td>
                 <td>
                   <button className="icon-button ghost" onClick={() => onRemove(symbol)} title={`Remover ${symbol}`} type="button">
                     {removeIcon}
