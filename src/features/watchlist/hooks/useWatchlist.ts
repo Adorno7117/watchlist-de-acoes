@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MarketDataClient, MarketQuote, StreamStatus } from '../../../services/marketData/types';
 import { normalizeSymbol } from '../utils/normalizeSymbol';
 import { readCachedSymbols, readStoredSymbols, writeStoredSymbols } from '../utils/watchlistStorage';
@@ -17,7 +17,7 @@ type WatchlistState = {
   symbols: string[];
 };
 
-const connectionCheckIntervalMs = 30000;
+const connectionCheckIntervalMs = 40000;
 
 export function useWatchlist({ initialSymbols, marketDataClient }: UseWatchlistOptions) {
   const initialWatchlist = useMemo(() => {
@@ -35,8 +35,13 @@ export function useWatchlist({ initialSymbols, marketDataClient }: UseWatchlistO
     quotes: {},
     symbols: initialWatchlist,
   });
+  const symbolsRef = useRef(state.symbols);
 
   const symbolsKey = useMemo(() => state.symbols.join('|'), [state.symbols]);
+
+  useEffect(() => {
+    symbolsRef.current = state.symbols;
+  }, [state.symbols]);
 
   const mergeQuote = useCallback((quote: MarketQuote) => {
     setState((current) => ({
@@ -50,7 +55,7 @@ export function useWatchlist({ initialSymbols, marketDataClient }: UseWatchlistO
   }, []);
 
   const refreshSnapshots = useCallback(async () => {
-    const symbols = state.symbols;
+    const symbols = symbolsRef.current;
 
     if (symbols.length === 0) return;
 
@@ -75,7 +80,7 @@ export function useWatchlist({ initialSymbols, marketDataClient }: UseWatchlistO
         isLoadingSnapshot: false,
       }));
     }
-  }, [marketDataClient, state.symbols]);
+  }, [marketDataClient]);
 
   const addSymbol = useCallback((rawSymbol: string) => {
     const symbol = normalizeSymbol(rawSymbol);
@@ -135,14 +140,14 @@ export function useWatchlist({ initialSymbols, marketDataClient }: UseWatchlistO
   }, [refreshSnapshots]);
 
   useEffect(() => {
-    if (state.symbols.length === 0) return undefined;
+    if (!symbolsKey) return undefined;
 
     const intervalId = window.setInterval(() => {
       void refreshSnapshots();
     }, connectionCheckIntervalMs);
 
     return () => window.clearInterval(intervalId);
-  }, [refreshSnapshots, state.symbols.length]);
+  }, [refreshSnapshots, symbolsKey]);
 
   useEffect(() => {
     if (hasLoadedStoredSymbols) {
