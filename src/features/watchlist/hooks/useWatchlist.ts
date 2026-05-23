@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { MarketDataClient, MarketQuote, StreamStatus } from '../../../services/marketData/types';
 import { normalizeSymbol } from '../utils/normalizeSymbol';
-import { readStoredSymbols, writeStoredSymbols } from '../utils/watchlistStorage';
+import { readCachedSymbols, readStoredSymbols, writeStoredSymbols } from '../utils/watchlistStorage';
 
 type UseWatchlistOptions = {
   initialSymbols: string[];
@@ -17,12 +17,15 @@ type WatchlistState = {
   symbols: string[];
 };
 
+const connectionCheckIntervalMs = 30000;
+
 export function useWatchlist({ initialSymbols, marketDataClient }: UseWatchlistOptions) {
   const initialWatchlist = useMemo(() => {
-    const storedSymbols = readStoredSymbols();
+    const storedSymbols = readCachedSymbols();
 
     return (storedSymbols?.length ? storedSymbols : initialSymbols).map(normalizeSymbol);
   }, [initialSymbols]);
+  const [hasLoadedStoredSymbols, setHasLoadedStoredSymbols] = useState(false);
 
   const [state, setState] = useState<WatchlistState>({
     connectionStatus: 'idle',
@@ -103,12 +106,49 @@ export function useWatchlist({ initialSymbols, marketDataClient }: UseWatchlistO
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    async function loadStoredSymbols() {
+      const storedSymbols = await readStoredSymbols();
+
+      if (!isMounted) return;
+
+      if (storedSymbols) {
+        setState((current) => ({
+          ...current,
+          symbols: storedSymbols.map(normalizeSymbol),
+        }));
+      }
+
+      setHasLoadedStoredSymbols(true);
+    }
+
+    void loadStoredSymbols();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     void refreshSnapshots();
   }, [refreshSnapshots]);
 
   useEffect(() => {
-    writeStoredSymbols(state.symbols);
-  }, [state.symbols]);
+    if (state.symbols.length === 0) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      void refreshSnapshots();
+    }, connectionCheckIntervalMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [refreshSnapshots, state.symbols.length]);
+
+  useEffect(() => {
+    if (hasLoadedStoredSymbols) {
+      void writeStoredSymbols(state.symbols);
+    }
+  }, [hasLoadedStoredSymbols, state.symbols]);
 
   useEffect(() => {
     const symbols = symbolsKey ? symbolsKey.split('|') : [];

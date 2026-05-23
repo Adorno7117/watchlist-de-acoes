@@ -24,6 +24,7 @@ type FinnhubTradeMessage = {
 
 const apiBaseUrl = 'https://finnhub.io/api/v1';
 const socketBaseUrl = 'wss://ws.finnhub.io';
+const reconnectDelayMs = 5000;
 
 function assertApiKey(apiKey: string | undefined): asserts apiKey is string {
   if (!apiKey) {
@@ -77,54 +78,75 @@ export const finnhubMarketDataClient: MarketDataClient = {
       return () => undefined;
     }
 
-    handlers.onStatusChange('connecting');
+    let reconnectTimeoutId: number | undefined;
+    let shouldReconnect = true;
+    let socket: WebSocket | undefined;
 
-    const socket = new WebSocket(`${socketBaseUrl}?token=${marketDataConfig.finnhubApiKey}`);
+    const connect = () => {
+      handlers.onStatusChange('connecting');
 
-    socket.addEventListener('open', () => {
-      handlers.onStatusChange('connected');
-      symbols.forEach((symbol) => {
-        socket.send(JSON.stringify({ symbol, type: 'subscribe' }));
-      });
-    });
+      socket = new WebSocket(`${socketBaseUrl}?token=${marketDataConfig.finnhubApiKey}`);
 
-    socket.addEventListener('message', (event) => {
-      const message = JSON.parse(event.data as string) as FinnhubTradeMessage;
-
-      if (message.type !== 'trade' || !message.data) return;
-
-      message.data.forEach((trade) => {
-        handlers.onQuote({
-          change: 0,
-          currentPrice: trade.p,
-          highPrice: trade.p,
-          lowPrice: trade.p,
-          openPrice: trade.p,
-          percentChange: 0,
-          previousClose: trade.p,
-          symbol: trade.s,
-          timestamp: trade.t,
-          volume: trade.v,
+      socket.addEventListener('open', () => {
+        handlers.onStatusChange('connected');
+        symbols.forEach((symbol) => {
+          socket?.send(JSON.stringify({ symbol, type: 'subscribe' }));
         });
       });
-    });
 
-    socket.addEventListener('error', () => {
-      handlers.onStatusChange('error');
-      handlers.onError(new Error('Falha na conexao em tempo real com a Finnhub.'));
-    });
+      socket.addEventListener('message', (event) => {
+        const message = JSON.parse(event.data as string) as FinnhubTradeMessage;
 
-    socket.addEventListener('close', () => {
-      handlers.onStatusChange('closed');
-    });
+        if (message.type !== 'trade' || !message.data) return;
+
+        message.data.forEach((trade) => {
+          handlers.onQuote({
+            change: 0,
+            currentPrice: trade.p,
+            highPrice: trade.p,
+            lowPrice: trade.p,
+            openPrice: trade.p,
+            percentChange: 0,
+            previousClose: trade.p,
+            symbol: trade.s,
+            timestamp: trade.t,
+            volume: trade.v,
+          });
+        });
+      });
+
+      socket.addEventListener('error', () => {
+        handlers.onStatusChange('error');
+        handlers.onError(new Error('Falha na conexao em tempo real com a Finnhub. Tentando reconectar...'));
+      });
+
+      socket.addEventListener('close', () => {
+        if (!shouldReconnect) {
+          handlers.onStatusChange('closed');
+          return;
+        }
+
+        handlers.onStatusChange('connecting');
+        reconnectTimeoutId = window.setTimeout(connect, reconnectDelayMs);
+      });
+    };
+
+    connect();
 
     return () => {
       symbols.forEach((symbol) => {
-        if (socket.readyState === WebSocket.OPEN) {
+        if (socket?.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ symbol, type: 'unsubscribe' }));
         }
       });
-      socket.close();
+
+      shouldReconnect = false;
+
+      if (reconnectTimeoutId) {
+        window.clearTimeout(reconnectTimeoutId);
+      }
+
+      socket?.close();
     };
   },
 };
